@@ -5,12 +5,15 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from django.utils import timezone
+from django.shortcuts import redirect
+from django.conf import settings
 from datetime import timedelta
 
 from .models import User, UserSession
 from .serializers import *
 from .utils import generate_session_token
 from .authentication import SessionTokenAuthentication
+from .oauth.github import *
 
 # Create your views here.
 
@@ -26,6 +29,7 @@ class SignupView(APIView):
             )
         return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
 
+#Login View
 class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -78,7 +82,7 @@ class LoginView(APIView):
             status = status.HTTP_200_OK,
         )
 
-
+#Logout View
 class LogoutView(APIView):
     authentication_classes = [SessionTokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -90,5 +94,99 @@ class LogoutView(APIView):
 
         return Response(
             {"message": "Logged out successfully"},
+            status = status.HTTP_200_OK,
+        )
+
+# GitHub Login View
+class GitHubLoginView(APIView):
+    permission_classes = []
+
+    def get(slef, request):
+        github_auth_url = (
+            "https://github.com/login/oauth/authorize"
+            f"?client_id={settings.GITHUB_CLIENT_ID}"
+            "&scope=read:user user:email"
+        )
+        return redirect(github_auth_url)
+
+# GitHub Callback View
+class GitHubCallbackView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        code = request.GET.get("code")
+
+        if not code:
+            return Response(
+                {
+                    "detail": "Authorization code missing."
+                },
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            access_token = exchange_code_for_access_token(code)
+            github_user = fetch_github_user(access_token)
+
+        except Exception:
+            return Response(
+                {"detail": "GitHub authentication failed"},
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        github_id = str(github_user.get("id"))
+        email = github_user.get("email")
+
+        if not email:
+            emails = fetch_github_user_emails(access_token)
+            primary_emails = [
+                e["email"] for e in emails if e.get("primary") and e.get("verified")
+            ]
+            if primary_emails:
+                email = primary_emails[0]
+
+        if not email:
+            return Response(
+                {"detail": "No verified email found in GitHub account."},
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = None
+        if User.objects.filter(github_id = github_id).exists():
+            user = User.objects.get(github_id = github_id)
+
+        elif User.objects.filter(email = email).exists():
+            user = User.objects.get(email=email)
+            user.github_id = github_id
+            user.auth_provider = "github"
+            user.save(update_fields=["github_id", "auth_provider"])
+
+        else:
+            user = User.objects.create(
+                email = email,
+                github_id = github_id,
+                auth_provider = "github",
+            )
+
+        raw_token, token_hash = generate_session_token()
+        expires_at = timezone.now() + timedelta(hours = 24)
+
+        UserSession.objects.create(
+            user = user, 
+            token_hash = token_hash,
+            expires_at = expires_at,
+        )
+
+        return Response(
+            {
+                "access_token": raw_token,
+                "token_type": "Bearer",
+                "expires_at": expires_at,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "auth_provider": user.auth_provider,
+                },
+            },
             status = status.HTTP_200_OK,
         )
