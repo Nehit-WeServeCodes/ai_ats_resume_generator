@@ -86,7 +86,8 @@ REST_FRAMEWORK = {
     ],
 }
 
-
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
