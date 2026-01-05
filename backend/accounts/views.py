@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from datetime import timedelta
@@ -9,6 +10,7 @@ from datetime import timedelta
 from .models import User, UserSession
 from .serializers import *
 from .utils import generate_session_token
+from .authentication import SessionTokenAuthentication
 
 # Create your views here.
 
@@ -73,5 +75,20 @@ class LoginView(APIView):
                     "auth_provider": user.auth_provider,
                 },
             },
+            status = status.HTTP_200_OK,
+        )
+
+
+class LogoutView(APIView):
+    authentication_classes = [SessionTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        session = request.auth
+        session.revoked = True
+        session.save(update_fields=["revoked"])
+
+        return Response(
+            {"message": "Logged out successfully"},
             status = status.HTTP_200_OK,
         )
