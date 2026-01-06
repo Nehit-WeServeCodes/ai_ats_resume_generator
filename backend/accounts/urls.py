@@ -7,4 +7,6 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name = "logout"),
     path("github/login/", GitHubLoginView.as_view(), name = "github-login"),
     path("github/callback/", GitHubCallbackView.as_view(), name = "github-callback"),
+    path("google/login/", GoogleLoginView.as_view(), name="google-login"),
+    path("google/callback/", GoogleCallbackView.as_view(), name="google-callback"),
 ]

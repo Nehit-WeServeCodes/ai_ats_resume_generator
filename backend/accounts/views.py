@@ -14,6 +14,7 @@ from .serializers import *
 from .utils import generate_session_token
 from .authentication import SessionTokenAuthentication
 from .oauth.github import *
+from .oauth.google import *
 
 # Create your views here.
 
@@ -166,6 +167,91 @@ class GitHubCallbackView(APIView):
                 email = email,
                 github_id = github_id,
                 auth_provider = "github",
+            )
+
+        raw_token, token_hash = generate_session_token()
+        expires_at = timezone.now() + timedelta(hours = 24)
+
+        UserSession.objects.create(
+            user = user, 
+            token_hash = token_hash,
+            expires_at = expires_at,
+        )
+
+        return Response(
+            {
+                "access_token": raw_token,
+                "token_type": "Bearer",
+                "expires_at": expires_at,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "auth_provider": user.auth_provider,
+                },
+            },
+            status = status.HTTP_200_OK,
+        )
+
+#Google Login View
+class GoogleLoginView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        google_auth_url = (
+            "https://accounts.google.com/o/oauth2/v2/auth"
+            f"?client_id={settings.GOOGLE_CLIENT_ID}"
+            "&response_type=code"
+            "&scope=openid email profile"
+            f"&redirect_uri={settings.GOOGLE_REDIRECT_URI}"
+        )
+        return redirect(google_auth_url)
+
+#Google Callback View
+class GoogleCallbackView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        code = request.GET.get("code")
+
+        if not code:
+            return Response(
+                {"detail":"Authorization code missing."},
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            access_token = exchange_code_for_access_token(code)
+            google_user = fetch_google_user(access_token)
+        except Exception:
+            return Response(
+                {"detail": "Google authentication failed"},
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        google_id = str(google_user.get("id"))
+        email = google_user.get("email")
+
+        if not email or not google_id:
+            return Response(
+                {"detail": "Invalid Google user data"},
+                status = status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = None
+        if User.objects.filter(google_id = google_id).exists():
+            user = User.objects.get(google_id = google_id)
+
+        elif User.objects.filter(email = email).exists():
+            user = User.objects.get(email=email)
+            user.google_id = google_id
+            user.auth_provider = "google"
+            user.save(update_fields=["google_id", "auth_provider"])
+
+        else:
+            user = User.objects.create(
+                email = email,
+                google_id= google_id,
+                auth_provider = "google",
             )
 
         raw_token, token_hash = generate_session_token()
