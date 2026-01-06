@@ -4,7 +4,7 @@ from django.conf import settings
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-def exchange_code_for_access_token(code: str) -> str:
+def google_exchange_code_for_token(code: str) -> str:
     response = requests.post(
         GOOGLE_TOKEN_URL,
         data = {

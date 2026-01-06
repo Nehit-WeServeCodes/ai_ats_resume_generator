@@ -5,7 +5,7 @@ GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
 GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
 
-def exchange_code_for_access_token(code: str) -> str:
+def github_exchange_code_for_token(code: str) -> str:
     response = requests.post(
         GITHUB_TOKEN_URL,
         headers = {"Accept": "application/json"},

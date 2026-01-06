@@ -8,6 +8,8 @@ from django.utils import timezone
 from django.shortcuts import redirect
 from django.conf import settings
 from datetime import timedelta
+from urllib.parse import urlencode
+import json
 from drf_spectacular.utils import extend_schema
 
 from .models import User, UserSession
@@ -43,12 +45,32 @@ class SignupView(APIView):
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"message": "User registered successfully"},
-                status = status.HTTP_201_CREATED,
+            user = serializer.save()
+            
+            # Auto-login: Create session and return JWT
+            jwt_data = generate_jwt_for_user(user)
+            
+            UserSession.objects.create(
+                user=user,
+                token_hash=jwt_data["jti_hash"],
+                expires_at=timezone.now() + timedelta(hours=24),
             )
-        return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
+            
+            return Response(
+                {
+                    "message": "User registered successfully",
+                    "access_token": jwt_data["jwt"],
+                    "token_type": "Bearer",
+                    "expires_in": jwt_data["expires_at"],
+                    "user": {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "auth_provider": user.auth_provider,
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @extend_schema(
     tags=["Authentication"],
@@ -192,12 +214,20 @@ class GitHubCallbackView(APIView):
             )
 
         try:
-            access_token = exchange_code_for_access_token(code)
+            access_token = github_exchange_code_for_token(code)
+            if not access_token:
+                return Response(
+                    {"detail": "Failed to get access token from GitHub"},
+                    status = status.HTTP_400_BAD_REQUEST,
+                )
             github_user = fetch_github_user(access_token)
 
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"GitHub OAuth Error: {e}")
+            traceback.print_exc()
             return Response(
-                {"detail": "GitHub authentication failed"},
+                {"detail": f"GitHub authentication failed: {str(e)}"},
                 status = status.HTTP_400_BAD_REQUEST,
             )
 
@@ -246,19 +276,18 @@ class GitHubCallbackView(APIView):
             expires_at = timezone.now() + timedelta(hours = 24),
         )
 
-        return Response(
-            {
-                "access_token": jwt_data["jwt"],
-                "token_type": "Bearer",
-                "expires_at": jwt_data["expires_at"],
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "auth_provider": user.auth_provider,
-                },
-            },
-            status = status.HTTP_200_OK,
-        )
+        # Redirect to frontend with token
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        user_data = json.dumps({
+            "id": str(user.id),
+            "email": user.email,
+            "auth_provider": user.auth_provider,
+        })
+        params = urlencode({
+            "access_token": jwt_data["jwt"],
+            "user": user_data,
+        })
+        return redirect(f"{frontend_url}/auth/callback?{params}")
 
 #Google Login View
 class GoogleLoginView(APIView):
@@ -289,7 +318,7 @@ class GoogleCallbackView(APIView):
             )
 
         try:
-            access_token = exchange_code_for_access_token(code)
+            access_token = google_exchange_code_for_token(code)
             google_user = fetch_google_user(access_token)
         except Exception:
             return Response(
@@ -307,7 +336,7 @@ class GoogleCallbackView(APIView):
             )
 
         user = None
-        if User.objects.filter(google_id = google_id).exists():
+        if User.objects.filter(google_id = google_id, auth_provider = "google",email = email).exists():
             user = User.objects.get(google_id = google_id)
 
         elif User.objects.filter(email = email).exists():
@@ -334,16 +363,15 @@ class GoogleCallbackView(APIView):
             expires_at = timezone.now() + timedelta(hours = 24),
         )
 
-        return Response(
-            {
-                "access_token": jwt_data["jwt"],
-                "token_type": "Bearer",
-                "expires_at": jwt_data["expires_at"],
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "auth_provider": user.auth_provider,
-                },
-            },
-            status = status.HTTP_200_OK,
-        )
+        # Redirect to frontend with token
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+        user_data = json.dumps({
+            "id": str(user.id),
+            "email": user.email,
+            "auth_provider": user.auth_provider,
+        })
+        params = urlencode({
+            "access_token": jwt_data["jwt"],
+            "user": user_data,
+        })
+        return redirect(f"{frontend_url}/auth/callback?{params}")
