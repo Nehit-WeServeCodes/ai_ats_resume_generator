@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.shortcuts import redirect
@@ -11,8 +11,8 @@ from datetime import timedelta
 
 from .models import User, UserSession
 from .serializers import *
-from .utils import generate_session_token
-from .authentication import SessionTokenAuthentication
+from .utils import *
+from .authentication import *
 from .oauth.github import *
 from .oauth.google import *
 
@@ -20,6 +20,7 @@ from .oauth.google import *
 
 #Signup View
 class SignupView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
@@ -32,6 +33,7 @@ class SignupView(APIView):
 
 #Login View
 class LoginView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -59,21 +61,23 @@ class LoginView(APIView):
                 status = status.HTTP_401_UNAUTHORIZED,
             )
 
-        raw_token, token_hash = generate_session_token()
+        # raw_token, token_hash = generate_session_token()
 
-        expires_at = timezone.now() + timedelta(hours = 24)
+        # expires_at = timezone.now() + timedelta(hours = 24)
+
+        jwt_data = generate_jwt_for_user(user)
 
         UserSession.objects.create(
             user=user,
-            token_hash = token_hash,
-            expires_at=expires_at,
+            token_hash = jwt_data["jti_hash"],
+            expires_at=timezone.now() + timedelta(hours=24),
         )
 
         return Response(
             {
-                "access_token": raw_token,
+                "access_token": jwt_data["jwt"],
                 "token_type": "Bearer",
-                "expires_in": expires_at,
+                "expires_in": jwt_data["expires_at"],
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
@@ -85,7 +89,7 @@ class LoginView(APIView):
 
 #Logout View
 class LogoutView(APIView):
-    authentication_classes = [SessionTokenAuthentication]
+    authentication_classes = [HybridJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -169,20 +173,22 @@ class GitHubCallbackView(APIView):
                 auth_provider = "github",
             )
 
-        raw_token, token_hash = generate_session_token()
-        expires_at = timezone.now() + timedelta(hours = 24)
+        # raw_token, token_hash = generate_session_token()
+        # expires_at = timezone.now() + timedelta(hours = 24)
+
+        jwt_data = generate_jwt_for_user(user)
 
         UserSession.objects.create(
             user = user, 
-            token_hash = token_hash,
-            expires_at = expires_at,
+            token_hash = jwt_data["jti_hash"],
+            expires_at = timezone.now() + timedelta(hours = 24),
         )
 
         return Response(
             {
-                "access_token": raw_token,
+                "access_token": jwt_data["jwt"],
                 "token_type": "Bearer",
-                "expires_at": expires_at,
+                "expires_at": jwt_data["expires_at"],
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
@@ -203,6 +209,7 @@ class GoogleLoginView(APIView):
             "&response_type=code"
             "&scope=openid email profile"
             f"&redirect_uri={settings.GOOGLE_REDIRECT_URI}"
+            "&prompt=select_account"
         )
         return redirect(google_auth_url)
 
@@ -254,20 +261,22 @@ class GoogleCallbackView(APIView):
                 auth_provider = "google",
             )
 
-        raw_token, token_hash = generate_session_token()
-        expires_at = timezone.now() + timedelta(hours = 24)
+        # raw_token, token_hash = generate_session_token()
+        # expires_at = timezone.now() + timedelta(hours = 24)
+
+        jwt_data = generate_jwt_for_user(user)
 
         UserSession.objects.create(
             user = user, 
-            token_hash = token_hash,
-            expires_at = expires_at,
+            token_hash = jwt_data["jti_hash"],
+            expires_at = timezone.now() + timedelta(hours = 24),
         )
 
         return Response(
             {
-                "access_token": raw_token,
+                "access_token": jwt_data["jwt"],
                 "token_type": "Bearer",
-                "expires_at": expires_at,
+                "expires_at": jwt_data["expires_at"],
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
