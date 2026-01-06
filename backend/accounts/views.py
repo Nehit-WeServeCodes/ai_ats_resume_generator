@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.shortcuts import redirect
 from django.conf import settings
 from datetime import timedelta
+from drf_spectacular.utils import extend_schema
 
 from .models import User, UserSession
 from .serializers import *
@@ -18,6 +19,24 @@ from .oauth.google import *
 
 # Create your views here.
 
+@extend_schema(
+    tags=["Authentication"],
+    request=SignupSerializer,
+    responses={
+        status.HTTP_201_CREATED: {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "User registered successfully",
+                }
+            },
+        }
+    },
+    operation_id="signup",
+    summary="User Signup",
+    description="User Signup",
+)
 #Signup View
 class SignupView(APIView):
     permission_classes = [AllowAny]
@@ -31,6 +50,49 @@ class SignupView(APIView):
             )
         return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(
+    tags=["Authentication"],
+    request=LoginSerializer,
+    responses={
+        status.HTTP_200_OK: {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+                },
+                "token_type": {
+                    "type": "string",
+                    "example": "Bearer",
+                },
+                "expires_in": {
+                    "type": "integer",
+                    "example": 3600,
+                },
+                "user": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "example": "1",
+                        },
+                        "email": {
+                            "type": "string",
+                            "example": "user@example.com",
+                        },
+                        "auth_provider": {
+                            "type": "string",
+                            "example": "email",
+                        },
+                    },
+                },
+            },
+        }
+    },
+    operation_id="login",
+    summary="User Login",
+    description="User Login",
+)
 #Login View
 class LoginView(APIView):
     permission_classes = [AllowAny]
