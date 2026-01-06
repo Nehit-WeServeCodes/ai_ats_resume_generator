@@ -91,9 +91,23 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "AI ATS Resume Generator API",
-    "DESCRIPTION": "API documentation for the AI ATS Resume Generator",
+    "DESCRIPTION": "Backend APIs for authenticcation, profile ingestion, resume generation, ATS scoring, and exports.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+
+    "COMPONENT_SPLIT_REQUEST": True,
+
+    "SECURITY": [
+        {"bearerAuth": []},
+    ],
+
+    "SECURITY_DEFINITIONS": {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    },
 }
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
