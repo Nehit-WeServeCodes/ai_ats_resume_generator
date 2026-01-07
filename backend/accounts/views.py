@@ -249,20 +249,28 @@ class GitHubCallbackView(APIView):
             )
 
         user = None
+        avatar_url = github_user.get("avatar_url")
+        
         if User.objects.filter(github_id = github_id).exists():
             user = User.objects.get(github_id = github_id)
+            # Update avatar_url if changed
+            if avatar_url and user.avatar_url != avatar_url:
+                user.avatar_url = avatar_url
+                user.save(update_fields=["avatar_url"])
 
         elif User.objects.filter(email = email).exists():
             user = User.objects.get(email=email)
             user.github_id = github_id
             user.auth_provider = "github"
-            user.save(update_fields=["github_id", "auth_provider"])
+            user.avatar_url = avatar_url
+            user.save(update_fields=["github_id", "auth_provider", "avatar_url"])
 
         else:
             user = User.objects.create(
                 email = email,
                 github_id = github_id,
                 auth_provider = "github",
+                avatar_url = avatar_url,
             )
 
         # raw_token, token_hash = generate_session_token()
@@ -282,6 +290,7 @@ class GitHubCallbackView(APIView):
             "id": str(user.id),
             "email": user.email,
             "auth_provider": user.auth_provider,
+            "avatar_url": user.avatar_url,
         })
         params = urlencode({
             "access_token": jwt_data["jwt"],
@@ -336,20 +345,28 @@ class GoogleCallbackView(APIView):
             )
 
         user = None
+        avatar_url = google_user.get("picture")
+        
         if User.objects.filter(google_id = google_id, auth_provider = "google",email = email).exists():
             user = User.objects.get(google_id = google_id)
+            # Update avatar_url if changed
+            if avatar_url and user.avatar_url != avatar_url:
+                user.avatar_url = avatar_url
+                user.save(update_fields=["avatar_url"])
 
         elif User.objects.filter(email = email).exists():
             user = User.objects.get(email=email)
             user.google_id = google_id
             user.auth_provider = "google"
-            user.save(update_fields=["google_id", "auth_provider"])
+            user.avatar_url = avatar_url
+            user.save(update_fields=["google_id", "auth_provider", "avatar_url"])
 
         else:
             user = User.objects.create(
                 email = email,
                 google_id= google_id,
                 auth_provider = "google",
+                avatar_url = avatar_url,
             )
 
         # raw_token, token_hash = generate_session_token()
@@ -369,6 +386,7 @@ class GoogleCallbackView(APIView):
             "id": str(user.id),
             "email": user.email,
             "auth_provider": user.auth_provider,
+            "avatar_url": user.avatar_url,
         })
         params = urlencode({
             "access_token": jwt_data["jwt"],

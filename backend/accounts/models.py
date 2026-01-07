@@ -39,6 +39,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     github_id = models.CharField(max_length=255, null=True, blank = True)
     google_id = models.CharField(max_length=255, null=True, blank=True)
+    avatar_url = models.URLField(max_length=500, null=True, blank=True)
 
     is_active = models.BooleanField(default = True)
     is_staff = models.BooleanField(default = False)
